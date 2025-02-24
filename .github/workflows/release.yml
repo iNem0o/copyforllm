@@ -1,0 +1,48 @@
+name: Release Extension
+
+on:
+  release:
+    types: [created]
+
+# Ajout des permissions nécessaires
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Attach to Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Compile TypeScript
+        run: npm run compile
+      
+      - name: Run tests
+        uses: GabrielBB/xvfb-action@v1
+        with:
+          run: npm test
+      
+      - name: Package Extension
+        run: npx @vscode/vsce package
+      
+      - name: Get Extension Version
+        id: get_version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Upload VSIX to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "*.vsix"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
