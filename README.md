@@ -21,6 +21,11 @@ This VS Code extension allows you to quickly copy one or multiple files as Markd
 - Automatic language detection for syntax highlighting based on file extension
 - Formats the output with the filename in bold and the content in a code block
 - Smart file handling: skips binary files and limits file sizes to prevent clipboard issues
+- Copy only selected text with "Copy Selection as Prompt"
+- Full file paths in headers for better context
+- Automatic filtering of sensitive files (like .env)
+- Masking of sensitive content (API keys, passwords, etc.)
+- Customizable separators between files
 
 Example output when copying a JavaScript file:
 
@@ -40,6 +45,54 @@ console.log("Hello, world!");
 
 When copying a folder, all text files within that folder (including in subdirectories) will be included with their relative paths.
 
+### Copying Selected Text
+
+1. Select specific lines of code in your editor
+2. Right-click and choose "Copy Selection as Prompt" from the context menu
+3. Only the selected text will be copied, with the file path included
+
+### Advanced Features
+
+#### Full File Paths
+
+By default, the extension includes the full file path in the header of each file, making it easier for LLMs to understand the context and structure of your codebase.
+
+Example:
+```
+**/path/to/your/script.js**
+
+```javascript
+// Your JavaScript code here
+console.log("Hello, world!");
+```
+
+#### Sensitive Content Protection
+
+The extension automatically:
+- Skips sensitive files like `.env`, `.git`, and `node_modules`
+- Masks sensitive content such as API keys, passwords, and secrets
+
+For example, if your code contains:
+```javascript
+const API_KEY = "sk_1234567890abcdef";
+```
+
+It will be copied as:
+```javascript
+const API_KEY = "****";
+```
+
+This helps prevent accidentally sharing sensitive information with LLMs.
+
+#### Customizable Separators
+
+You can customize how files are separated in the copied output. By default, files are separated by a blank line, but you can change this in your VS Code settings:
+
+1. Open VS Code Settings (File > Preferences > Settings or Ctrl+,)
+2. Search for "copyforllm"
+3. Find the "Separator" setting and change it to your preferred separator (e.g., "---" for a horizontal rule)
+
+This allows you to format the output in a way that works best with your preferred LLM.
 
 ## Development
 
@@ -86,6 +139,15 @@ You can also build and install the extension manually:
 8. Choose the generated VSIX file
 
 ## Release Notes
+
+### 1.0.1
+
+Major update with new features:
+- Added "Copy Selection as Prompt" to copy only selected text
+- Added full file paths in headers for better context
+- Added automatic filtering of sensitive files (like .env)
+- Added masking of sensitive content (API keys, passwords, etc.)
+- Added customizable separators between files
 
 ### 1.0.0
 

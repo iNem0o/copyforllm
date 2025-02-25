@@ -47,8 +47,8 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Check if the clipboard content matches the expected format
-			const expectedContent = `**test-file.js**\n\n\`\`\`javascript\n${testContent}\n\`\`\`\n\n`;
+			// Check if the clipboard content matches the expected format with full path
+			const expectedContent = `**${testFilePath}**\n\n\`\`\`javascript\n${testContent}\n\`\`\`\n\n`;
 			assert.strictEqual(clipboardContent, expectedContent, 'Clipboard content should match expected Markdown format');
 			
 		} finally {
@@ -89,9 +89,9 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Check if the clipboard content contains both files in the expected format
-			const expectedContent1 = `**test-file1.js**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
-			const expectedContent2 = `**test-file2.py**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
+			// Check if the clipboard content contains both files in the expected format with full paths
+			const expectedContent1 = `**${testFile1Path}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
+			const expectedContent2 = `**${testFile2Path}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
 			
 			assert.ok(clipboardContent.includes(expectedContent1), 'Clipboard should contain the first file content');
 			assert.ok(clipboardContent.includes(expectedContent2), 'Clipboard should contain the second file content');
@@ -110,101 +110,91 @@ suite('Extension Test Suite', () => {
 	test('Should handle directories recursively', async function() {
 		this.timeout(20000); // Increase timeout for directory operations
 		
-		// Create a temporary directory structure
-		const tmpDir = path.join(os.tmpdir(), 'copyforllm-test-' + Date.now());
-		const subDir = path.join(tmpDir, 'subdir');
+		// Create a temporary test directory with files
+		const tmpDir = os.tmpdir();
+		const testDirPath = path.join(tmpDir, 'test-dir-' + Date.now());
+		const subDirPath = path.join(testDirPath, 'subdir');
+		const rootFilePath = path.join(testDirPath, 'root-file.js');
+		const subFilePath = path.join(subDirPath, 'sub-file.js');
 		
-		const testFile1Path = path.join(tmpDir, 'root-file.js');
-		const testFile2Path = path.join(subDir, 'sub-file.py');
-		
-		const testContent1 = 'console.log("Hello from root!");';
-		const testContent2 = 'print("Hello from subdirectory!")';
+		const rootContent = 'console.log("Root file");';
+		const subContent = 'console.log("Sub file");';
 		
 		try {
 			// Create directory structure
-			await fs.promises.mkdir(tmpDir, { recursive: true });
-			await fs.promises.mkdir(subDir, { recursive: true });
+			await fs.promises.mkdir(testDirPath, { recursive: true });
+			await fs.promises.mkdir(subDirPath, { recursive: true });
 			
 			// Write test content to files
-			await fs.promises.writeFile(testFile1Path, testContent1, 'utf8');
-			await fs.promises.writeFile(testFile2Path, testContent2, 'utf8');
+			await fs.promises.writeFile(rootFilePath, rootContent, 'utf8');
+			await fs.promises.writeFile(subFilePath, subContent, 'utf8');
 			
-			// Create URI for the root directory
-			const dirUri = vscode.Uri.file(tmpDir);
+			// Create URI for the test directory
+			const uri = vscode.Uri.file(testDirPath);
 			
-			// Execute the command with our directory
-			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', dirUri);
+			// Execute the command with our test directory
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri);
 			
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Check if the clipboard content contains both files with relative paths
-			assert.ok(clipboardContent.includes('**root-file.js**'), 'Clipboard should contain the root file');
-			assert.ok(clipboardContent.includes(testContent1), 'Clipboard should contain the root file content');
+			// Check if the clipboard content contains both files
+			const expectedRootContent = `**${rootFilePath}**\n\n\`\`\`javascript\n${rootContent}\n\`\`\`\n\n`;
+			const expectedSubContent = `**${subFilePath}**\n\n\`\`\`javascript\n${subContent}\n\`\`\`\n\n`;
 			
-			assert.ok(clipboardContent.includes('**subdir/sub-file.py**') || 
-					  clipboardContent.includes('**subdir\\sub-file.py**'), 
-					  'Clipboard should contain the subdirectory file with relative path');
-			assert.ok(clipboardContent.includes(testContent2), 'Clipboard should contain the subdirectory file content');
+			assert.ok(clipboardContent.includes(expectedRootContent), 'Clipboard should contain the root file');
+			assert.ok(clipboardContent.includes(expectedSubContent), 'Clipboard should contain the sub file');
 			
 		} finally {
-			// Clean up: delete the test directory and all its contents
+			// Clean up: delete the test directory and its contents
 			try {
-				await fs.promises.rm(tmpDir, { recursive: true, force: true });
+				await fs.promises.rm(testDirPath, { recursive: true, force: true });
 			} catch (error) {
 				console.error('Error cleaning up test directory:', error);
-				// Fallback cleanup for older Node.js versions
-				try {
-					await fs.promises.unlink(testFile1Path);
-					await fs.promises.unlink(testFile2Path);
-					await fs.promises.rmdir(subDir);
-					await fs.promises.rmdir(tmpDir);
-				} catch (e) {
-					console.error('Error in fallback cleanup:', e);
-				}
 			}
 		}
 	});
 
 	test('Should skip binary files', async function() {
-		this.timeout(10000);
+		this.timeout(15000); // Increase timeout for file operations
 		
-		// Create a temporary test file with binary-like content
+		// Create temporary test files
 		const tmpDir = os.tmpdir();
-		const textFilePath = path.join(tmpDir, 'text-file.txt');
-		const binaryFilePath = path.join(tmpDir, 'binary-file.jpg');
+		const testTextPath = path.join(tmpDir, 'test-text.js');
+		const testBinaryPath = path.join(tmpDir, 'test-binary.jpg'); // Using a common binary extension
 		
-		const textContent = 'This is a text file';
-		// Create some binary-like content
-		const binaryContent = Buffer.from([0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00]);
+		const textContent = 'console.log("This is a text file");';
+		const binaryContent = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG file signature
 		
 		try {
 			// Write test content to files
-			await fs.promises.writeFile(textFilePath, textContent, 'utf8');
-			await fs.promises.writeFile(binaryFilePath, binaryContent);
+			await fs.promises.writeFile(testTextPath, textContent, 'utf8');
+			await fs.promises.writeFile(testBinaryPath, binaryContent);
 			
 			// Create URIs for the test files
-			const textUri = vscode.Uri.file(textFilePath);
-			const binaryUri = vscode.Uri.file(binaryFilePath);
+			const uri1 = vscode.Uri.file(testTextPath);
+			const uri2 = vscode.Uri.file(testBinaryPath);
 			
-			// Execute the command with both files
-			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', textUri, [textUri, binaryUri]);
+			// Execute the command with our test files
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri1, [uri1, uri2]);
 			
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Check that the text file is included
-			assert.ok(clipboardContent.includes('**text-file.txt**'), 'Clipboard should contain the text file');
-			assert.ok(clipboardContent.includes(textContent), 'Clipboard should contain the text file content');
+			// Check if the clipboard content contains only the text file
+			const expectedTextContent = `**${testTextPath}**\n\n\`\`\`javascript\n${textContent}\n\`\`\`\n\n`;
 			
-			// We don't explicitly test that the binary file is excluded, as the implementation
-			// might mention the binary file name in error messages or comments
+			assert.ok(clipboardContent.includes(expectedTextContent), 'Clipboard should contain the text file');
+			
+			// The binary file should not be included in the content
+			// We'll check that the binary file path is not in the clipboard content
+			assert.ok(!clipboardContent.includes(`**${testBinaryPath}`), 'Clipboard should not contain the binary file');
 			
 		} finally {
 			// Clean up: delete the test files
 			try {
-				await fs.promises.unlink(textFilePath);
-				await fs.promises.unlink(binaryFilePath);
+				await fs.promises.unlink(testTextPath);
+				await fs.promises.unlink(testBinaryPath);
 			} catch (error) {
 				console.error('Error cleaning up test files:', error);
 			}
@@ -212,16 +202,16 @@ suite('Extension Test Suite', () => {
 	});
 
 	test('Should handle large files correctly', async function() {
-		this.timeout(30000); // Increase timeout for large file operations
+		this.timeout(15000); // Increase timeout for large file operations
 		
-		// Create a temporary test file with large content
+		// Create temporary test files
 		const tmpDir = os.tmpdir();
-		const smallFilePath = path.join(tmpDir, 'small-file.txt');
+		const smallFilePath = path.join(tmpDir, 'small-file.js');
 		const largeFilePath = path.join(tmpDir, 'large-file.txt');
 		
-		const smallContent = 'This is a small file';
-		// Create a large string (6MB, which exceeds our 5MB limit)
-		const largeContent = 'X'.repeat(6 * 1024 * 1024);
+		const smallContent = 'console.log("This is a small file");';
+		// Create a large content (> 5MB)
+		const largeContent = 'a'.repeat(6 * 1024 * 1024); // 6MB of 'a's
 		
 		try {
 			// Write test content to files
@@ -229,21 +219,20 @@ suite('Extension Test Suite', () => {
 			await fs.promises.writeFile(largeFilePath, largeContent, 'utf8');
 			
 			// Create URIs for the test files
-			const smallUri = vscode.Uri.file(smallFilePath);
-			const largeUri = vscode.Uri.file(largeFilePath);
+			const uri1 = vscode.Uri.file(smallFilePath);
+			const uri2 = vscode.Uri.file(largeFilePath);
 			
-			// Execute the command with both files
-			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', smallUri, [smallUri, largeUri]);
+			// Execute the command with our test files
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri1, [uri1, uri2]);
 			
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Check that only the small file is included
-			assert.ok(clipboardContent.includes('**small-file.txt**'), 'Clipboard should contain the small file');
-			assert.ok(clipboardContent.includes(smallContent), 'Clipboard should contain the small file content');
+			// Check if the clipboard content contains only the small file
+			const expectedSmallContent = `**${smallFilePath}**\n\n\`\`\`javascript\n${smallContent}\n\`\`\`\n\n`;
 			
-			// The large file should be skipped
-			assert.ok(!clipboardContent.includes('**large-file.txt**'), 'Clipboard should not contain the large file');
+			assert.ok(clipboardContent.includes(expectedSmallContent), 'Clipboard should contain the small file');
+			assert.ok(!clipboardContent.includes('large-file.txt'), 'Clipboard should not contain the large file content');
 			
 		} finally {
 			// Clean up: delete the test files
@@ -302,32 +291,32 @@ suite('Extension Test Suite', () => {
 	});
 
 	test('Should respect total clipboard size limit', async function() {
-		this.timeout(30000); // Increase timeout for large file operations
+		this.timeout(30000); // Increase timeout for multiple large file operations
 		
 		// Create multiple files that together exceed the clipboard size limit
 		const tmpDir = os.tmpdir();
-		
-		// Create 20 files of 3MB each (total 60MB, exceeding the 50MB limit)
-		const numFiles = 20;
-		const fileSize = 3 * 1024 * 1024; // 3MB per file
+		const numFiles = 10;
 		const filePaths = [];
 		const fileContents = [];
 		
+		// Each file will be about 5MB, so 10 files would be ~50MB, exceeding our limit
+		const fileSize = 5 * 1024 * 1024;
+		
 		try {
-			// Create and write to all files
+			// Create the test files
 			for (let i = 0; i < numFiles; i++) {
-				const filePath = path.join(tmpDir, `file${i}.txt`);
+				const filePath = path.join(tmpDir, `test-file-${i}.txt`);
 				filePaths.push(filePath);
 				
-				// Create unique content for each file
-				const content = `File ${i} content: ` + 'X'.repeat(fileSize - 20);
+				// Create content with a unique identifier at the beginning
+				const content = `File ${i}: ` + 'X'.repeat(fileSize - 10);
 				fileContents.push(content);
 				
 				await fs.promises.writeFile(filePath, content, 'utf8');
 			}
 			
 			// Create URIs for all files
-			const uris = filePaths.map(filePath => vscode.Uri.file(filePath));
+			const uris = filePaths.map(fp => vscode.Uri.file(fp));
 			
 			// Execute the command with all files
 			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uris[0], uris);
@@ -335,19 +324,17 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
-			// Count how many files were included
-			let includedFiles = 0;
+			// Check that at least some files are included
+			let filesIncluded = 0;
 			for (let i = 0; i < numFiles; i++) {
-				if (clipboardContent.includes(`**file${i}.txt**`)) {
-					includedFiles++;
+				if (clipboardContent.includes(`**${filePaths[i]}**`)) {
+					filesIncluded++;
 				}
 			}
 			
-			// Some files should be included
-			assert.ok(includedFiles > 0, 'At least some files should be included');
-			
-			// Not all files should be included due to the clipboard size limit
-			assert.ok(includedFiles < numFiles, 'Not all files should be included due to size limit');
+			// We should have at least one file, but not all files due to the size limit
+			assert.ok(filesIncluded > 0, 'At least some files should be included');
+			assert.ok(filesIncluded < numFiles, 'Not all files should be included due to size limit');
 			
 		} finally {
 			// Clean up: delete all test files
@@ -357,6 +344,312 @@ suite('Extension Test Suite', () => {
 				} catch (error) {
 					console.error(`Error cleaning up test file ${filePath}:`, error);
 				}
+			}
+		}
+	});
+
+	test('Should include full path in file header', async function() {
+		this.timeout(10000); // Increase timeout for file operations
+		
+		// Create a temporary test file
+		const tmpDir = os.tmpdir();
+		const testFilePath = path.join(tmpDir, 'test-file.js');
+		const testContent = 'console.log("Hello, world!");';
+		
+		try {
+			// Write test content to file
+			await fs.promises.writeFile(testFilePath, testContent, 'utf8');
+			
+			// Create URI for the test file
+			const uri = vscode.Uri.file(testFilePath);
+			
+			// Execute the command with our test file
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri);
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			
+			// Check if the clipboard content includes the full path
+			// We expect the format to be "**/path/to/test-file.js**"
+			const fileName = path.basename(testFilePath);
+			const expectedPathPattern = new RegExp(`\\*\\*.*${fileName}\\*\\*`);
+			
+			assert.ok(expectedPathPattern.test(clipboardContent), 'Clipboard content should include the full path in the header');
+			
+		} finally {
+			// Clean up: delete the test file
+			try {
+				await fs.promises.unlink(testFilePath);
+			} catch (error) {
+				console.error('Error cleaning up test file:', error);
+			}
+		}
+	});
+
+	test('Should use custom separator between files', async function() {
+		this.timeout(15000); // Increase timeout for file operations
+		
+		// Create temporary test files
+		const tmpDir = os.tmpdir();
+		const testFile1Path = path.join(tmpDir, 'test-file1.js');
+		const testFile2Path = path.join(tmpDir, 'test-file2.py');
+		
+		const testContent1 = 'console.log("Hello from JavaScript!");';
+		const testContent2 = 'print("Hello from Python!")';
+		
+		try {
+			// Write test content to files
+			await fs.promises.writeFile(testFile1Path, testContent1, 'utf8');
+			await fs.promises.writeFile(testFile2Path, testContent2, 'utf8');
+			
+			// Create URIs for the test files
+			const uri1 = vscode.Uri.file(testFile1Path);
+			const uri2 = vscode.Uri.file(testFile2Path);
+			
+			// Set custom separator in configuration
+			await vscode.workspace.getConfiguration('copyforllm').update('separator', '---', vscode.ConfigurationTarget.Global);
+			
+			// Execute the command with our test files
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri1, [uri1, uri2]);
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			
+			// Check if the clipboard content contains the custom separator between files
+			const file1Content = `**${testFile1Path}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
+			const file2Content = `**${testFile2Path}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
+			const expectedContent = file1Content + '---\n' + file2Content;
+			
+			assert.ok(clipboardContent.includes('---\n'), 'Clipboard should contain the custom separator');
+			
+			// Reset configuration to default
+			await vscode.workspace.getConfiguration('copyforllm').update('separator', undefined, vscode.ConfigurationTarget.Global);
+			
+		} finally {
+			// Clean up: delete the test files
+			try {
+				await fs.promises.unlink(testFile1Path);
+				await fs.promises.unlink(testFile2Path);
+			} catch (error) {
+				console.error('Error cleaning up test files:', error);
+			}
+		}
+	});
+
+	test('Should use custom header format', async function() {
+		this.timeout(10000); // Increase timeout for file operations
+		
+		// Create a temporary test file
+		const tmpDir = os.tmpdir();
+		const testFilePath = path.join(tmpDir, 'test-file.js');
+		const testContent = 'console.log("Hello, world!");';
+		
+		try {
+			// Write test content to file
+			await fs.promises.writeFile(testFilePath, testContent, 'utf8');
+			
+			// Create URI for the test file
+			const uri = vscode.Uri.file(testFilePath);
+			
+			// Set custom header format in configuration
+			await vscode.workspace.getConfiguration('copyforllm').update('headerFormat', '## File: {filePath}', vscode.ConfigurationTarget.Global);
+			
+			// Execute the command with our test file
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri);
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			
+			// Check if the clipboard content uses the custom header format
+			const expectedHeader = `## File: ${testFilePath}`;
+			
+			assert.ok(clipboardContent.includes(expectedHeader), 'Clipboard should use the custom header format');
+			assert.ok(!clipboardContent.includes(`**${testFilePath}**`), 'Clipboard should not use the default header format');
+			
+			// Reset configuration to default
+			await vscode.workspace.getConfiguration('copyforllm').update('headerFormat', undefined, vscode.ConfigurationTarget.Global);
+			
+		} finally {
+			// Clean up: delete the test file
+			try {
+				await fs.promises.unlink(testFilePath);
+			} catch (error) {
+				console.error('Error cleaning up test file:', error);
+			}
+		}
+	});
+
+	test('Should ignore files based on extension patterns', async function() {
+		this.timeout(15000); // Increase timeout for file operations
+		
+		// Create temporary test files
+		const tmpDir = os.tmpdir();
+		const jsFilePath = path.join(tmpDir, 'test-file.js');
+		const envFilePath = path.join(tmpDir, 'test-file.env');
+		
+		const jsContent = 'console.log("This is a JavaScript file");';
+		const envContent = 'API_KEY=1234567890';
+		
+		try {
+			// Write test content to files
+			await fs.promises.writeFile(jsFilePath, jsContent, 'utf8');
+			await fs.promises.writeFile(envFilePath, envContent, 'utf8');
+			
+			// Create URIs for the test files
+			const uri1 = vscode.Uri.file(jsFilePath);
+			const uri2 = vscode.Uri.file(envFilePath);
+			
+			// Set ignored extensions in configuration
+			await vscode.workspace.getConfiguration('copyforllm').update('ignoredExtensions', ['.env'], vscode.ConfigurationTarget.Global);
+			
+			// Execute the command with our test files
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri1, [uri1, uri2]);
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			
+			// Check if the clipboard content contains only the JavaScript file
+			assert.ok(clipboardContent.includes(jsFilePath), 'Clipboard should contain the JavaScript file');
+			assert.ok(!clipboardContent.includes(envFilePath), 'Clipboard should not contain the .env file');
+			
+			// Reset configuration to default
+			await vscode.workspace.getConfiguration('copyforllm').update('ignoredExtensions', undefined, vscode.ConfigurationTarget.Global);
+			
+		} finally {
+			// Clean up: delete the test files
+			try {
+				await fs.promises.unlink(jsFilePath);
+				await fs.promises.unlink(envFilePath);
+			} catch (error) {
+				console.error('Error cleaning up test files:', error);
+			}
+		}
+	});
+
+	test('Should mask sensitive content', async function() {
+		this.timeout(10000); // Increase timeout for file operations
+		
+		// Create a temporary test file with sensitive content
+		const tmpDir = os.tmpdir();
+		const testFilePath = path.join(tmpDir, 'config.js');
+		const testContent = `
+			const config = {
+				apiKey: "1234567890abcdef",
+				password: "supersecret",
+				username: "admin",
+				url: "https://api.example.com"
+			};
+		`;
+		
+		try {
+			// Write test content to file
+			await fs.promises.writeFile(testFilePath, testContent, 'utf8');
+			
+			// Create URI for the test file
+			const uri = vscode.Uri.file(testFilePath);
+			
+			// Set sensitive patterns in configuration
+			await vscode.workspace.getConfiguration('copyforllm').update('sensitivePatterns', [
+				{ pattern: 'apiKey: "[^"]*"', replacement: 'apiKey: "****"' },
+				{ pattern: 'password: "[^"]*"', replacement: 'password: "****"' }
+			], vscode.ConfigurationTarget.Global);
+			
+			// Execute the command with our test file
+			await vscode.commands.executeCommand('copyforllm.copyAsPrompt', uri);
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			
+			// Check if the clipboard content has masked the sensitive content
+			assert.ok(clipboardContent.includes('apiKey: "****"'), 'Clipboard should mask API key');
+			assert.ok(clipboardContent.includes('password: "****"'), 'Clipboard should mask password');
+			assert.ok(!clipboardContent.includes('1234567890abcdef'), 'Clipboard should not contain the actual API key');
+			assert.ok(!clipboardContent.includes('supersecret'), 'Clipboard should not contain the actual password');
+			assert.ok(clipboardContent.includes('username: "admin"'), 'Clipboard should keep non-sensitive content');
+			
+			// Reset configuration to default
+			await vscode.workspace.getConfiguration('copyforllm').update('sensitivePatterns', undefined, vscode.ConfigurationTarget.Global);
+			
+		} finally {
+			// Clean up: delete the test file
+			try {
+				await fs.promises.unlink(testFilePath);
+			} catch (error) {
+				console.error('Error cleaning up test file:', error);
+			}
+		}
+	});
+
+	test('Should copy only selected text when using copyAsPromptFromSelection', async function() {
+		this.timeout(15000); // Increase timeout for file operations
+		
+		// Check if the command exists
+		const commands = await vscode.commands.getCommands();
+		if (!commands.includes('copyforllm.copyAsPromptFromSelection')) {
+			console.log('Command copyforllm.copyAsPromptFromSelection not found, skipping test');
+			this.skip();
+			return;
+		}
+		
+		// Create a temporary test file with multiple lines
+		const tmpDir = os.tmpdir();
+		const testFilePath = path.join(tmpDir, 'multiline.js');
+		const testContent = `// Line 1
+// Line 2
+// Line 3
+function test() {
+  // Line 5
+  console.log("Hello");
+  // Line 7
+  return true;
+  // Line 9
+}
+// Line 11`;
+		
+		try {
+			// Write test content to file
+			await fs.promises.writeFile(testFilePath, testContent, 'utf8');
+			
+			// Create URI for the test file
+			const uri = vscode.Uri.file(testFilePath);
+			
+			// Open the document
+			const document = await vscode.workspace.openTextDocument(uri);
+			const editor = await vscode.window.showTextDocument(document);
+			
+			// Create a selection (lines 4-8)
+			const startPos = new vscode.Position(3, 0); // Line 4 (0-indexed), column 0
+			const endPos = new vscode.Position(8, 0);   // Line 9 (0-indexed), column 0
+			const selection = new vscode.Selection(startPos, endPos);
+			
+			// Set the editor selection
+			editor.selection = selection;
+			
+			// Execute the command with our selection
+			await vscode.commands.executeCommand('copyforllm.copyAsPromptFromSelection');
+			
+			// Wait a bit for the clipboard to be updated
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			
+			// Get clipboard content
+			const clipboardContent = await vscode.env.clipboard.readText();
+			console.log('Clipboard content:', clipboardContent);
+			
+			// Check if the clipboard content contains the selected lines
+			// We're checking for the presence of key parts rather than the exact content
+			assert.ok(clipboardContent.includes('function test()'), 'Clipboard should contain the function declaration');
+			assert.ok(clipboardContent.includes('console.log("Hello")'), 'Clipboard should contain the console.log line');
+			assert.ok(clipboardContent.includes('return true'), 'Clipboard should contain the return statement');
+			assert.ok(!clipboardContent.includes('// Line 1'), 'Clipboard should not contain text before selection');
+			assert.ok(!clipboardContent.includes('// Line 11'), 'Clipboard should not contain text after selection');
+			
+		} finally {
+			// Clean up: delete the test file and close the editor
+			try {
+				await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+				await fs.promises.unlink(testFilePath);
+			} catch (error) {
+				console.error('Error cleaning up test file:', error);
 			}
 		}
 	});

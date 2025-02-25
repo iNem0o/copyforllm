@@ -6,7 +6,7 @@
   },
   "displayName": "CopyForLLM",
   "description": "Copy file content as markdown for LLM prompts",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -26,6 +26,10 @@
       {
         "command": "copyforllm.copyAsPrompt",
         "title": "Copy as Prompt"
+      },
+      {
+        "command": "copyforllm.copyAsPromptFromSelection",
+        "title": "Copy Selection as Prompt"
       }
     ],
     "menus": {
@@ -40,6 +44,11 @@
           "command": "copyforllm.copyAsPrompt",
           "group": "clipboard",
           "when": "editorFocus"
+        },
+        {
+          "command": "copyforllm.copyAsPromptFromSelection",
+          "group": "clipboard",
+          "when": "editorHasSelection"
         }
       ],
       "view/item/context": [
@@ -48,6 +57,44 @@
           "group": "clipboard"
         }
       ]
+    },
+    "configuration": {
+      "title": "CopyForLLM",
+      "properties": {
+        "copyforllm.separator": {
+          "type": "string",
+          "default": "",
+          "description": "Custom separator to use between files in the copied content"
+        },
+        "copyforllm.headerFormat": {
+          "type": "string",
+          "default": "**{filePath}**",
+          "description": "Format for the file header. Use {filePath} as a placeholder for the file path."
+        },
+        "copyforllm.ignoredExtensions": {
+          "type": "array",
+          "default": [".env", ".git", ".gitignore"],
+          "description": "File extensions to ignore when copying content"
+        },
+        "copyforllm.sensitivePatterns": {
+          "type": "array",
+          "default": [
+            {
+              "pattern": "API_KEY\\s*=\\s*[\"']?[^\"'\\s]+[\"']?",
+              "replacement": "API_KEY=****"
+            },
+            {
+              "pattern": "PASSWORD\\s*=\\s*[\"']?[^\"'\\s]+[\"']?",
+              "replacement": "PASSWORD=****"
+            },
+            {
+              "pattern": "SECRET\\s*=\\s*[\"']?[^\"'\\s]+[\"']?",
+              "replacement": "SECRET=****"
+            }
+          ],
+          "description": "Patterns to mask sensitive content. Each pattern is a regular expression with a replacement."
+        }
+      }
     }
   },
   "scripts": {

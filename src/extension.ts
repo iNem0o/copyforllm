@@ -9,6 +9,64 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 // Maximum total content size for clipboard (50MB)
 const MAX_CLIPBOARD_SIZE = 50 * 1024 * 1024;
 
+// Configuration helper
+class ConfigHelper {
+	// Get configuration object
+	private static getConfig() {
+		return vscode.workspace.getConfiguration('copyforllm');
+	}
+	
+	// Get custom separator
+	static getSeparator(): string {
+		const separator = this.getConfig().get<string>('separator', '');
+		return separator ? separator + '\n' : '';
+	}
+	
+	// Get header format
+	static getHeaderFormat(filePath: string): string {
+		const headerFormat = this.getConfig().get<string>('headerFormat', '**{filePath}**');
+		return headerFormat.replace('{filePath}', filePath);
+	}
+	
+	// Get ignored extensions
+	static getIgnoredExtensions(): string[] {
+		return this.getConfig().get<string[]>('ignoredExtensions', ['.env', '.git', '.gitignore']);
+	}
+	
+	// Check if a file should be ignored based on its extension
+	static shouldIgnoreFile(filePath: string): boolean {
+		const extension = path.extname(filePath).toLowerCase();
+		const ignoredExtensions = this.getIgnoredExtensions();
+		return ignoredExtensions.includes(extension);
+	}
+	
+	// Get sensitive patterns
+	static getSensitivePatterns(): Array<{ pattern: string, replacement: string }> {
+		return this.getConfig().get<Array<{ pattern: string, replacement: string }>>('sensitivePatterns', [
+			{ pattern: 'API_KEY\\s*=\\s*["\']?[^"\'\\s]+["\']?', replacement: 'API_KEY=****' },
+			{ pattern: 'PASSWORD\\s*=\\s*["\']?[^"\'\\s]+["\']?', replacement: 'PASSWORD=****' },
+			{ pattern: 'SECRET\\s*=\\s*["\']?[^"\'\\s]+["\']?', replacement: 'SECRET=****' }
+		]);
+	}
+	
+	// Mask sensitive content in a string
+	static maskSensitiveContent(content: string): string {
+		const patterns = this.getSensitivePatterns();
+		let maskedContent = content;
+		
+		for (const { pattern, replacement } of patterns) {
+			try {
+				const regex = new RegExp(pattern, 'g');
+				maskedContent = maskedContent.replace(regex, replacement);
+			} catch (error) {
+				console.error(`Error applying sensitive pattern ${pattern}:`, error);
+			}
+		}
+		
+		return maskedContent;
+	}
+}
+
 // Function to detect language from file extension
 function detectLanguage(filePath: string): string {
 	const extension = path.extname(filePath).toLowerCase();
@@ -52,6 +110,11 @@ function shouldProcessFile(filePath: string): boolean {
 		'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
 	];
 	
+	// Check if the file should be ignored based on configuration
+	if (ConfigHelper.shouldIgnoreFile(filePath)) {
+		return false;
+	}
+	
 	return !binaryExtensions.includes(extension);
 }
 
@@ -77,6 +140,21 @@ async function getAllFilesInDirectory(dirPath: string): Promise<string[]> {
 	}
 	
 	return files;
+}
+
+// Function to format file content as markdown with full path
+function formatFileAsMarkdown(filePath: string, content: string): string {
+	// Detect language for syntax highlighting
+	const language = detectLanguage(filePath);
+	
+	// Mask sensitive content
+	const maskedContent = ConfigHelper.maskSensitiveContent(content);
+	
+	// Get custom header format
+	const headerFormat = ConfigHelper.getHeaderFormat(filePath);
+	
+	// Format as markdown with custom header
+	return `${headerFormat}\n\n\`\`\`${language}\n${maskedContent}\n\`\`\`\n\n`;
 }
 
 // This method is called when your extension is activated
@@ -112,6 +190,9 @@ export function activate(context: vscode.ExtensionContext) {
 			let totalFiles = 0;
 			let skippedFiles = 0;
 			let totalContentSize = 0;
+			
+			// Get custom separator
+			const separator = ConfigHelper.getSeparator();
 
 			// Process each selected item (file or directory)
 			for (const itemUri of selectedItems) {
@@ -145,16 +226,16 @@ export function activate(context: vscode.ExtensionContext) {
 								// Read file content
 								const fileContent = await fs.promises.readFile(filePath, 'utf8');
 								
-								// Get file name with relative path from the selected directory
-								const relativePath = path.relative(itemUri.fsPath, filePath);
+								// Format as markdown with full path
+								const fileMarkdown = formatFileAsMarkdown(filePath, fileContent);
 								
-								// Detect language for syntax highlighting
-								const language = detectLanguage(filePath);
+								// Add separator if not the first file
+								if (markdownContent && separator) {
+									markdownContent += separator;
+								}
 								
-								// Format as markdown
-								const fileMarkdown = `**${relativePath}**\n\n\`\`\`${language}\n${fileContent}\n\`\`\`\n\n`;
 								markdownContent += fileMarkdown;
-								totalContentSize += fileMarkdown.length;
+								totalContentSize += fileMarkdown.length + separator.length;
 								processedFiles++;
 							} catch (fileError) {
 								console.error(`Error processing file ${filePath}:`, fileError);
@@ -164,6 +245,20 @@ export function activate(context: vscode.ExtensionContext) {
 					} else {
 						// It's a file, process it directly
 						totalFiles++;
+						
+						// Skip ignored files based on extension
+						if (ConfigHelper.shouldIgnoreFile(itemUri.fsPath)) {
+							console.log(`Ignoring file with ignored extension: ${itemUri.fsPath}`);
+							skippedFiles++;
+							continue;
+						}
+						
+						// Skip binary files
+						if (!shouldProcessFile(itemUri.fsPath)) {
+							console.log(`Skipping binary file: ${itemUri.fsPath}`);
+							skippedFiles++;
+							continue;
+						}
 						
 						// Check file size before reading
 						if (stats.size > MAX_FILE_SIZE) {
@@ -182,16 +277,16 @@ export function activate(context: vscode.ExtensionContext) {
 						// Read file content
 						const fileContent = await fs.promises.readFile(itemUri.fsPath, 'utf8');
 						
-						// Get file name
-						const fileName = path.basename(itemUri.fsPath);
+						// Format as markdown with full path
+						const fileMarkdown = formatFileAsMarkdown(itemUri.fsPath, fileContent);
 						
-						// Detect language for syntax highlighting
-						const language = detectLanguage(itemUri.fsPath);
+						// Add separator if not the first file
+						if (markdownContent && separator) {
+							markdownContent += separator;
+						}
 						
-						// Format as markdown
-						const fileMarkdown = `**${fileName}**\n\n\`\`\`${language}\n${fileContent}\n\`\`\`\n\n`;
 						markdownContent += fileMarkdown;
-						totalContentSize += fileMarkdown.length;
+						totalContentSize += fileMarkdown.length + separator.length;
 						processedFiles++;
 					}
 				} catch (itemError) {
@@ -219,8 +314,46 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register our copyAsPromptFromSelection command
+	const copySelectionDisposable = vscode.commands.registerCommand('copyforllm.copyAsPromptFromSelection', async () => {
+		try {
+			// Get the active text editor
+			const editor = vscode.window.activeTextEditor;
+			if (!editor) {
+				vscode.window.showErrorMessage('No active text editor found.');
+				return;
+			}
+
+			// Get the selected text
+			const selection = editor.selection;
+			if (selection.isEmpty) {
+				vscode.window.showErrorMessage('No text selected. Please select some text first.');
+				return;
+			}
+
+			// Get the document and file path
+			const document = editor.document;
+			const filePath = document.uri.fsPath;
+			
+			// Get the selected text
+			const selectedText = document.getText(selection);
+			
+			// Format as markdown with full path
+			const markdownContent = formatFileAsMarkdown(filePath, selectedText);
+			
+			// Copy to clipboard
+			await vscode.env.clipboard.writeText(markdownContent);
+			
+			vscode.window.showInformationMessage('Selected text copied to clipboard as Markdown!');
+		} catch (error) {
+			console.error('Error in copyAsPromptFromSelection command:', error);
+			vscode.window.showErrorMessage('Failed to copy selection: ' + (error instanceof Error ? error.message : String(error)));
+		}
+	});
+
 	context.subscriptions.push(helloWorldDisposable);
 	context.subscriptions.push(copyFilesDisposable);
+	context.subscriptions.push(copySelectionDisposable);
 }
 
 // This method is called when your extension is deactivated
