@@ -47,8 +47,19 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize path for comparison
+			let normalizedPath = testFilePath;
+			if (process.platform === 'win32') {
+				// Ensure consistent casing for drive letter (always uppercase)
+				if (/^[a-z]:/.test(normalizedPath)) {
+					normalizedPath = normalizedPath.charAt(0).toUpperCase() + normalizedPath.slice(1);
+				}
+				// Ensure consistent backslashes
+				normalizedPath = normalizedPath.replace(/\\/g, '\\\\');
+			}
+			
 			// Check if the clipboard content matches the expected format with full path
-			const expectedContent = `**${testFilePath}**\n\n\`\`\`javascript\n${testContent}\n\`\`\`\n\n`;
+			const expectedContent = `**${normalizedPath}**\n\n\`\`\`javascript\n${testContent}\n\`\`\`\n\n`;
 			assert.strictEqual(clipboardContent, expectedContent, 'Clipboard content should match expected Markdown format');
 			
 		} finally {
@@ -89,9 +100,13 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize paths for comparison
+			const normalizedPath1 = normalizePath(testFile1Path);
+			const normalizedPath2 = normalizePath(testFile2Path);
+			
 			// Check if the clipboard content contains both files in the expected format with full paths
-			const expectedContent1 = `**${testFile1Path}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
-			const expectedContent2 = `**${testFile2Path}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
+			const expectedContent1 = `**${normalizedPath1}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
+			const expectedContent2 = `**${normalizedPath2}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
 			
 			assert.ok(clipboardContent.includes(expectedContent1), 'Clipboard should contain the first file content');
 			assert.ok(clipboardContent.includes(expectedContent2), 'Clipboard should contain the second file content');
@@ -138,9 +153,13 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize paths for comparison
+			const normalizedRootPath = normalizePath(rootFilePath);
+			const normalizedSubPath = normalizePath(subFilePath);
+			
 			// Check if the clipboard content contains both files
-			const expectedRootContent = `**${rootFilePath}**\n\n\`\`\`javascript\n${rootContent}\n\`\`\`\n\n`;
-			const expectedSubContent = `**${subFilePath}**\n\n\`\`\`javascript\n${subContent}\n\`\`\`\n\n`;
+			const expectedRootContent = `**${normalizedRootPath}**\n\n\`\`\`javascript\n${rootContent}\n\`\`\`\n\n`;
+			const expectedSubContent = `**${normalizedSubPath}**\n\n\`\`\`javascript\n${subContent}\n\`\`\`\n\n`;
 			
 			assert.ok(clipboardContent.includes(expectedRootContent), 'Clipboard should contain the root file');
 			assert.ok(clipboardContent.includes(expectedSubContent), 'Clipboard should contain the sub file');
@@ -181,8 +200,11 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize path for comparison
+			const normalizedTextPath = normalizePath(testTextPath);
+			
 			// Check if the clipboard content contains only the text file
-			const expectedTextContent = `**${testTextPath}**\n\n\`\`\`javascript\n${textContent}\n\`\`\`\n\n`;
+			const expectedTextContent = `**${normalizedTextPath}**\n\n\`\`\`javascript\n${textContent}\n\`\`\`\n\n`;
 			
 			assert.ok(clipboardContent.includes(expectedTextContent), 'Clipboard should contain the text file');
 			
@@ -228,8 +250,11 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize path for comparison
+			const normalizedSmallPath = normalizePath(smallFilePath);
+			
 			// Check if the clipboard content contains only the small file
-			const expectedSmallContent = `**${smallFilePath}**\n\n\`\`\`javascript\n${smallContent}\n\`\`\`\n\n`;
+			const expectedSmallContent = `**${normalizedSmallPath}**\n\n\`\`\`javascript\n${smallContent}\n\`\`\`\n\n`;
 			
 			assert.ok(clipboardContent.includes(expectedSmallContent), 'Clipboard should contain the small file');
 			assert.ok(!clipboardContent.includes('large-file.txt'), 'Clipboard should not contain the large file content');
@@ -327,7 +352,8 @@ suite('Extension Test Suite', () => {
 			// Check that at least some files are included
 			let filesIncluded = 0;
 			for (let i = 0; i < numFiles; i++) {
-				if (clipboardContent.includes(`**${filePaths[i]}**`)) {
+				const normalizedPath = normalizePath(filePaths[i]);
+				if (clipboardContent.includes(`**${normalizedPath}**`)) {
 					filesIncluded++;
 				}
 			}
@@ -372,9 +398,11 @@ suite('Extension Test Suite', () => {
 			// Check if the clipboard content includes the full path
 			// We expect the format to be "**/path/to/test-file.js**"
 			const fileName = path.basename(testFilePath);
+			const normalizedPath = normalizePath(testFilePath);
 			const expectedPathPattern = new RegExp(`\\*\\*.*${fileName}\\*\\*`);
 			
 			assert.ok(expectedPathPattern.test(clipboardContent), 'Clipboard content should include the full path in the header');
+			assert.ok(clipboardContent.includes(normalizedPath), 'Clipboard content should include the normalized path');
 			
 		} finally {
 			// Clean up: delete the test file
@@ -415,9 +443,13 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize paths for comparison
+			const normalizedPath1 = normalizePath(testFile1Path);
+			const normalizedPath2 = normalizePath(testFile2Path);
+			
 			// Check if the clipboard content contains the custom separator between files
-			const file1Content = `**${testFile1Path}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
-			const file2Content = `**${testFile2Path}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
+			const file1Content = `**${normalizedPath1}**\n\n\`\`\`javascript\n${testContent1}\n\`\`\`\n\n`;
+			const file2Content = `**${normalizedPath2}**\n\n\`\`\`python\n${testContent2}\n\`\`\`\n\n`;
 			const expectedContent = file1Content + '---\n' + file2Content;
 			
 			assert.ok(clipboardContent.includes('---\n'), 'Clipboard should contain the custom separator');
@@ -460,11 +492,14 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize path for comparison
+			const normalizedPath = normalizePath(testFilePath);
+			
 			// Check if the clipboard content uses the custom header format
-			const expectedHeader = `## File: ${testFilePath}`;
+			const expectedHeader = `## File: ${normalizedPath}`;
 			
 			assert.ok(clipboardContent.includes(expectedHeader), 'Clipboard should use the custom header format');
-			assert.ok(!clipboardContent.includes(`**${testFilePath}**`), 'Clipboard should not use the default header format');
+			assert.ok(!clipboardContent.includes(`**${normalizedPath}**`), 'Clipboard should not use the default header format');
 			
 			// Reset configuration to default
 			await vscode.workspace.getConfiguration('copyforllm').update('headerFormat', undefined, vscode.ConfigurationTarget.Global);
@@ -508,9 +543,13 @@ suite('Extension Test Suite', () => {
 			// Get clipboard content
 			const clipboardContent = await vscode.env.clipboard.readText();
 			
+			// Normalize path for comparison
+			const normalizedJsPath = normalizePath(jsFilePath);
+			const normalizedEnvPath = normalizePath(envFilePath);
+			
 			// Check if the clipboard content contains only the JavaScript file
-			assert.ok(clipboardContent.includes(jsFilePath), 'Clipboard should contain the JavaScript file');
-			assert.ok(!clipboardContent.includes(envFilePath), 'Clipboard should not contain the .env file');
+			assert.ok(clipboardContent.includes(normalizedJsPath), 'Clipboard should contain the JavaScript file');
+			assert.ok(!clipboardContent.includes(normalizedEnvPath), 'Clipboard should not contain the .env file');
 			
 			// Reset configuration to default
 			await vscode.workspace.getConfiguration('copyforllm').update('ignoredExtensions', undefined, vscode.ConfigurationTarget.Global);
@@ -654,3 +693,16 @@ function test() {
 		}
 	});
 });
+
+// Helper function to normalize paths for tests
+function normalizePath(filePath: string): string {
+	if (process.platform === 'win32') {
+		// Ensure consistent casing for drive letter (always uppercase)
+		if (/^[a-z]:/.test(filePath)) {
+			filePath = filePath.charAt(0).toUpperCase() + filePath.slice(1);
+		}
+		// Ensure consistent backslashes
+		filePath = filePath.replace(/\\/g, '\\\\');
+	}
+	return filePath;
+}

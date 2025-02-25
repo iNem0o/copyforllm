@@ -150,8 +150,19 @@ function formatFileAsMarkdown(filePath: string, content: string): string {
 	// Mask sensitive content
 	const maskedContent = ConfigHelper.maskSensitiveContent(content);
 	
+	// Normalize file path for Windows
+	let normalizedPath = filePath;
+	if (process.platform === 'win32') {
+		// Ensure consistent casing for drive letter (always uppercase)
+		if (/^[a-z]:/.test(normalizedPath)) {
+			normalizedPath = normalizedPath.charAt(0).toUpperCase() + normalizedPath.slice(1);
+		}
+		// Ensure consistent backslashes
+		normalizedPath = normalizedPath.replace(/\\/g, '\\\\');
+	}
+	
 	// Get custom header format
-	const headerFormat = ConfigHelper.getHeaderFormat(filePath);
+	const headerFormat = ConfigHelper.getHeaderFormat(normalizedPath);
 	
 	// Format as markdown with custom header
 	return `${headerFormat}\n\n\`\`\`${language}\n${maskedContent}\n\`\`\`\n\n`;
